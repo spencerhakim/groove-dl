@@ -4,6 +4,7 @@ import wx.lib.newevent
 import groove
 import threading
 import urllib
+import httplib
 import os
 import sys
 import time
@@ -27,6 +28,7 @@ evtExecFunc, EVT_EXEC_FUNC = wx.lib.newevent.NewEvent()
 ID_DOWNLOAD = wx.NewId()
 ID_REMOVE = wx.NewId()
 dest = "Songs"
+version = "0.93"
 
 def strip(value, deletechars):
     for c in deletechars:
@@ -210,18 +212,36 @@ class t_init(threading.Thread):
     def __init__ (self, _frame):
         threading.Thread.__init__(self)
         self.frame = _frame
+    def update(self):
+        wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Checking for updates..."))
+        conn = httplib.HTTPConnection("www.groove-dl.co.cc")
+        conn.request("GET", "/version")
+        new = conn.getresponse().read()
+        if  new != version:
+            dlg = wx.MessageDialog(self.frame, "There is a new version available. Do you wish to update ?", "Update found", wx.YES_NO | wx.ICON_QUESTION)
+            if dlg.ShowModal() == wx.ID_YES:
+                filename = urllib.urlretrieve("https://github.com/downloads/jacktheripper51/groove-dl/groove-dl_" + new + "all.exe", reporthook=self.updatehook)[0]
+                print filename
+        wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Ready"))
+    def updatehook(self, countBlocks, Block, TotalSize):
+        if countBlocks*Block >= TotalSize:
+            wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Update Complete"))
+        else:
+            wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Updating...%d%%" % (countBlocks*Block/TotalSize)))
+    
     def run(self):
         p = 1
         while(p):
             try:
                 wx.PostEvent(self.frame, evtExecFunc(func=EnableFrame, attr1=False))
+                self.update()
                 wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Initializing..."))
                 groove.init()
                 wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Getting Token..."))
                 groove.getToken()
-                wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Ready"))
                 wx.PostEvent(self.frame, evtExecFunc(func=EnableFrame, attr1=True))
                 wx.PostEvent(self.frame, evtExecFunc(func=SetFocus, attr1=self.frame.txt_query))
+                wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Ready"))
                 p = 0
             except Exception, e:
                 if e.args[0] == 11004:
