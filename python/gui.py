@@ -28,7 +28,7 @@ evtExecFunc, EVT_EXEC_FUNC = wx.lib.newevent.NewEvent()
 ID_DOWNLOAD = wx.NewId()
 ID_REMOVE = wx.NewId()
 dest = "Songs"
-version = "0.93"
+version = "0.94"
 
 def strip(value, deletechars):
     for c in deletechars:
@@ -67,7 +67,7 @@ class MyFrame(wx.Frame):
         self.SetIcon(icon)
         del icon
     def __set_properties(self):
-        self.SetTitle("JTR's Grooveshark Downloader")
+        self.SetTitle("JTR's Grooveshark Downloader v" + version)
         self.SetSize((600, 400))
         self.cb_type.SetMinSize((100, 23))
         self.cb_type.SetSelection(0)
@@ -159,14 +159,14 @@ class t_download(threading.Thread):
         threading.Thread.__init__(self)
         self.frame = frame
         self.songid = song["SongID"]
-        self.duration = int(song["EstimateDuration"])
+        self.duration = float(song["EstimateDuration"])
         self.cancelled = False
     def run(self):
         key = groove.getStreamKeyFromSongIDEx(self.songid)
         try: os.makedirs(dest)
         except: pass
         try:
-            self.t = time.clock()
+            self.t = time.time()
             self.beg = self.t
             self.lastCount = 0
             urllib.urlretrieve("http://" + key["result"]["ip"] + "/stream.php", dest + "/" + self.download["filename"], self.hook, "streamKey="+key["result"]["streamKey"])
@@ -182,14 +182,14 @@ class t_download(threading.Thread):
             if self.duration != 0: self.download["bitrate"] = "%ukbps" % (TotalSize*8 / self.duration / 1000)
             else: self.download["bitrate"] = "Failed"
         self.download["progress"] = "%.0f%%" % progress if progress < 100 else "Completed"
-        if time.clock() - self.t > 0.2:
+        if time.time() - self.t > 0.2:
             self.download["size"] = "%.02f/%.02f MB" % (float(countBlocks*Block) / 1024**2, float(TotalSize) / 1024**2)
-            self.download["speed"] = "%.02f KB/s" % ((countBlocks - self.lastCount)*Block / (time.clock() - self.t) / 1024)
-            self.t = time.clock()
+            self.download["speed"] = "%.02f KB/s" % ((countBlocks - self.lastCount)*Block / (time.time() - self.t) / 1024)
+            self.t = time.time()
             self.lastCount = countBlocks
         if countBlocks*Block >= TotalSize:
             self.download["size"] = "%.02f/%.02f MB" % (float(TotalSize) / 1024**2, float(TotalSize) / 1024**2)
-            self.download["speed"] = self.download["speed"] = "~%.02f KB/s" % (countBlocks*Block / (time.clock() - self.beg) / 1024)
+            self.download["speed"] = self.download["speed"] = "~%.02f KB/s" % (countBlocks*Block / (time.time() - self.beg) / 1024)
         wx.PostEvent(self.frame, evtExecFunc(func=UpdateItem, attr1=self.download))
 
 class t_search(threading.Thread):
@@ -217,24 +217,28 @@ class t_init(threading.Thread):
         conn = httplib.HTTPConnection("www.groove-dl.co.cc")
         conn.request("GET", "/version")
         new = conn.getresponse().read()
-        if  new != version:
+        if new != version:
             dlg = wx.MessageDialog(self.frame, "There is a new version available. Do you wish to update ?", "Update found", wx.YES_NO | wx.ICON_QUESTION)
             if dlg.ShowModal() == wx.ID_YES:
-                filename = urllib.urlretrieve("https://github.com/downloads/jacktheripper51/groove-dl/groove-dl_" + new + "all.exe", reporthook=self.updatehook)[0]
-                print filename
-        wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Ready"))
+                self.filename = urllib.urlretrieve("https://github.com/downloads/jacktheripper51/groove-dl/groove-dl_" + new + "all.exe", reporthook=self.updatehook)[0]
+                wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Update Complete"))
+                newfile = '\\'.join(self.filename.split("\\")[:-1]) + "\\temp.exe"
+                o = open(newfile, "wb")
+                for l in open(self.filename, "rb"):                                      ### Hack to replace the extract path
+                    if "InstallPath" in l:                                               ### to the current directory
+                        l = l[:12] + '"' + os.getcwd().replace('\\', '\\\\') + '"\n'   ### because the functionality doesn't
+                    o.write(l)                                                          ### exist yet in 7zsfx through CLI
+                o.close()
+                subprocess.Popen(["runas", newfile, "-ai", "-gm2", "-y"])
+                os._exit(0)
     def updatehook(self, countBlocks, Block, TotalSize):
-        if countBlocks*Block >= TotalSize:
-            wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Update Complete"))
-        else:
-            wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Updating...%d%%" % (countBlocks*Block/TotalSize)))
-    
+        wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Downloading updates... %d%%" % (float(countBlocks)*Block/TotalSize*100)))
     def run(self):
         p = 1
         while(p):
             try:
                 wx.PostEvent(self.frame, evtExecFunc(func=EnableFrame, attr1=False))
-                self.update()
+                if sys.platform == "win32": self.update()
                 wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Initializing..."))
                 groove.init()
                 wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Getting Token..."))
