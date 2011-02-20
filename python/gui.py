@@ -28,7 +28,7 @@ evtExecFunc, EVT_EXEC_FUNC = wx.lib.newevent.NewEvent()
 ID_DOWNLOAD = wx.NewId()
 ID_REMOVE = wx.NewId()
 dest = "Songs"
-version = "0.93"
+version = "0.94"
 
 def strip(value, deletechars):
     for c in deletechars:
@@ -67,7 +67,7 @@ class MyFrame(wx.Frame):
         self.SetIcon(icon)
         del icon
     def __set_properties(self):
-        self.SetTitle("JTR's Grooveshark Downloader")
+        self.SetTitle("JTR's Grooveshark Downloader v" + version)
         self.SetSize((600, 400))
         self.cb_type.SetMinSize((100, 23))
         self.cb_type.SetSelection(0)
@@ -220,21 +220,24 @@ class t_init(threading.Thread):
         if  new != version:
             dlg = wx.MessageDialog(self.frame, "There is a new version available. Do you wish to update ?", "Update found", wx.YES_NO | wx.ICON_QUESTION)
             if dlg.ShowModal() == wx.ID_YES:
-                filename = urllib.urlretrieve("https://github.com/downloads/jacktheripper51/groove-dl/groove-dl_" + new + "all.exe", reporthook=self.updatehook)[0]
-                print filename
-        wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Ready"))
+                self.filename = urllib.urlretrieve("https://github.com/downloads/jacktheripper51/groove-dl/groove-dl_" + new + "all.exe", reporthook=self.updatehook)[0]
+                wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Update Complete"))
+                newfile = '\\'.join(self.filename.split("\\")[:-1]) + "\\temp.exe"
+                o = open(newfile, "wb")
+                for l in open(self.filename, "rb"):                                      ### Hack to replace the extract path
+                    if "InstallPath" in l:                                               ### to the current directory
+                        l = l[:12] + '"' + os.getcwd().replace('\\', '\\\\') + '"\n'   ### because the functionality doesn't
+                        o.write(l)                                                           ### exist yet in 7zsfx through CLI
+                o.close()
+                subprocess.Popen([filename, "-ai", "-gm2", "-y"])
     def updatehook(self, countBlocks, Block, TotalSize):
-        if countBlocks*Block >= TotalSize:
-            wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Update Complete"))
-        else:
-            wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Updating...%d%%" % (countBlocks*Block/TotalSize)))
-    
+        wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Updating...%d%%" % (countBlocks*Block/TotalSize)))
     def run(self):
         p = 1
         while(p):
             try:
                 wx.PostEvent(self.frame, evtExecFunc(func=EnableFrame, attr1=False))
-                self.update()
+                if sys.platform == "win32": self.update()
                 wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Initializing..."))
                 groove.init()
                 wx.PostEvent(self.frame, evtExecFunc(func=SetStatus, attr1="Getting Token..."))
