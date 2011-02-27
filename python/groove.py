@@ -10,8 +10,10 @@ import sys
 import os
 import subprocess
 import gzip
+import time
 
 _useragent = "Mozilla/5.0 (Windows NT 6.1; rv:2.0.1) Gecko/20100101 Firefox/4.0.1"
+_referer = "http://listen.grooveshark.com/JSQueue.swf?20110216.04"
 _token = None
 
 h = {}
@@ -25,11 +27,6 @@ h["privacy"] = 0
 h["session"] = None
 h["uuid"] = str(uuid.uuid4())
 
-entrystring = \
-"""A Grooveshark song downloader in python
-by George Stephanos <gaf.stephanos@gmail.com>
-"""
-
 def prepToken(method):
     rnd = (''.join(random.choice(string.hexdigits) for x in range(6))).lower()
     return rnd + hashlib.sha1(method + ":" + _token + ":quitStealinMahShit:" + rnd).hexdigest()
@@ -42,9 +39,9 @@ def getToken():
     p["method"] = "getCommunicationToken"
     p["header"] = h
     p["header"]["client"] = "htmlshark"
-    p["header"]["clientRevision"] = "20100831"
-    conn = httplib.HTTPSConnection("retrocowbell.grooveshark.com")
-    conn.request("POST", "/service.php", json.JSONEncoder().encode(p), {"User-Agent": _useragent, "Content-Type":"", "Accept-Encoding":"gzip", "Cookie":"PHPSESSID=" + h["session"]})
+    p["header"]["clientRevision"] = "20101222.35"
+    conn = httplib.HTTPSConnection("listen.grooveshark.com")
+    conn.request("POST", "/more.php", json.JSONEncoder().encode(p), {"User-Agent": _useragent, "Referer": _referer, "Content-Type":"", "Accept-Encoding":"gzip", "Cookie":"PHPSESSID=" + h["session"]})
     _token = json.JSONDecoder().decode(gzip.GzipFile(fileobj=(StringIO.StringIO(conn.getresponse().read()))).read())["result"]
 
 def getSearchResultsEx(query, type="Songs"):
@@ -54,11 +51,11 @@ def getSearchResultsEx(query, type="Songs"):
     p["parameters"]["query"] = query
     p["header"] = h
     p["header"]["client"] = "htmlshark"
-    p["header"]["clientRevision"] = "20100831"
+    p["header"]["clientRevision"] = "20101222"
     p["header"]["token"] = prepToken("getSearchResultsEx")
     p["method"] = "getSearchResultsEx"
     conn = httplib.HTTPConnection("listen.grooveshark.com")
-    conn.request("POST", "/more.php?" + p["method"], json.JSONEncoder().encode(p), {"User-Agent": _useragent, "Content-Type":"", "Accept-Encoding":"gzip", "Cookie":"PHPSESSID=" + h["session"]})
+    conn.request("POST", "/more.php?" + p["method"], json.JSONEncoder().encode(p), {"User-Agent": _useragent, "Referer":"http://listen.grooveshark.com/", "Content-Type":"", "Accept-Encoding":"gzip", "Cookie":"PHPSESSID=" + h["session"]})
     return json.JSONDecoder().decode(gzip.GzipFile(fileobj=(StringIO.StringIO(conn.getresponse().read()))).read())["result"]["result"]
 
 def getStreamKeyFromSongIDEx(id):
@@ -70,11 +67,11 @@ def getStreamKeyFromSongIDEx(id):
     p["parameters"]["country"] = h["Country"]
     p["header"] = h
     p["header"]["client"] = "jsqueue"
-    p["header"]["clientRevision"] = "20101012.37"
+    p["header"]["clientRevision"] = "20101222.35"
     p["header"]["token"] = prepToken("getStreamKeyFromSongIDEx")
     p["method"] = "getStreamKeyFromSongIDEx"
     conn = httplib.HTTPConnection("listen.grooveshark.com")
-    conn.request("POST", "/more.php?" + p["method"], json.JSONEncoder().encode(p), {"User-Agent": _useragent, "Content-Type":"", "Accept-Encoding":"gzip", "Cookie":"PHPSESSID=" + h["session"]})
+    conn.request("POST", "/more.php?" + p["method"], json.JSONEncoder().encode(p), {"User-Agent": _useragent, "Referer": _referer, "Content-Type":"", "Accept-Encoding":"gzip", "Cookie":"PHPSESSID=" + h["session"]})
     return json.JSONDecoder().decode(gzip.GzipFile(fileobj=(StringIO.StringIO(conn.getresponse().read()))).read())
 
 def header_cb(buf):
@@ -91,23 +88,16 @@ def init():
     h["session"] = cookie[0][10:]
 
 if __name__ == "__main__":
-    print entrystring
-    if len(sys.argv) < 2:
-        import gui
-        gui.main()
-        exit()
     init()
     getToken()
-    m = 0
+    time.sleep(3)
+    
     s = getSearchResultsEx(sys.argv[1])
-    for l in s:
-        m += 1
-        print str(m) + ': "' + l["SongName"] + '" by "' + l["ArtistName"] + '" (' + l["AlbumName"] + ')'
-        if m == 10: break
-    songid = raw_input("Enter the Song ID you wish to download or (q) to exit: ")
-    if songid == "" or songid == "q": exit()
-    songid = eval(songid)
+    songid = 0
+    print s[songid]["SongName"] + '" by "' + s[songid]["ArtistName"] + '" (' + s[songid]["AlbumName"] + ')'
+    time.sleep(2)
+    
     stream = getStreamKeyFromSongIDEx(s[songid]["SongID"])
-    s =  'wget --post-data=streamKey=%s -O "%s - %s.mp3" "http://%s/stream.php"' % (stream["result"]["streamKey"], s[songid]["ArtistName"], s[songid]["SongName"], stream["result"]["ip"])
+    s = 'wget --user-agent="%s" --referer=%s --header "Cookie: %s" --post-data=streamKey=%s -O "cache/%s - %s.mp3" "http://%s/stream.php"' % (_useragent, _referer, "PHPSESSID=" + h["session"], stream["result"]["streamKey"], s[songid]["ArtistName"], s[songid]["SongName"], stream["result"]["ip"])
     p = subprocess.Popen(s, shell=True)
     p.wait()
