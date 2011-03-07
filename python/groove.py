@@ -11,6 +11,8 @@ import os
 import subprocess
 import gzip
 import time
+import shlex
+import os.path
 
 _useragent = "Mozilla/5.0 (Windows NT 6.1; rv:2.0.1) Gecko/20100101 Firefox/4.0.1"
 _referer = "http://listen.grooveshark.com/JSQueue.swf?20110216.04"
@@ -90,14 +92,22 @@ def init():
 if __name__ == "__main__":
     init()
     getToken()
-    time.sleep(3)
+    time.sleep( random.random() * 4 )
     
     s = getSearchResultsEx(sys.argv[1])
     songid = 0
-    print s[songid]["SongName"] + '" by "' + s[songid]["ArtistName"] + '" (' + s[songid]["AlbumName"] + ')'
-    time.sleep(2)
     
-    stream = getStreamKeyFromSongIDEx(s[songid]["SongID"])
-    s = 'wget --user-agent="%s" --referer=%s --header "Cookie: %s" --post-data=streamKey=%s -O "cache/%s - %s.mp3" "http://%s/stream.php"' % (_useragent, _referer, "PHPSESSID=" + h["session"], stream["result"]["streamKey"], s[songid]["ArtistName"], s[songid]["SongName"], stream["result"]["ip"])
-    p = subprocess.Popen(s, shell=True)
-    p.wait()
+    if !os.path.exists('cache/%s - %s.mp3' % (s[songid]["ArtistName"], s[songid]["SongName"])):
+        time.sleep( random.random() * 4 )
+        stream = getStreamKeyFromSongIDEx(s[songid]["SongID"])
+        
+        cmd = 'wget -o /dev/null --user-agent="%s" --referer=%s --header "Cookie: %s" --post-data=streamKey=%s -O "cache/%s - %s.mp3" "http://%s/stream.php"' % (_useragent, _referer, "PHPSESSID=" + h["session"], stream["result"]["streamKey"], s[songid]["ArtistName"], s[songid]["SongName"], stream["result"]["ip"])
+        args = shlex.split(cmd.encode('ascii'))
+        p = subprocess.Popen(args)
+        p.wait()
+        
+        if p.returncode != 0:
+            sys.exit(p.returncode);
+            
+    print 'cache/%s - %s.mp3' % (s[songid]["ArtistName"], s[songid]["SongName"])
+    sys.exit(0);
