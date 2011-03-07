@@ -90,6 +90,9 @@ def init():
     h["session"] = cookie[0][10:]
 
 if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        sys.exit(1)
+    
     init()
     getToken()
     time.sleep( random.random() * 4 )
@@ -97,7 +100,7 @@ if __name__ == "__main__":
     s = getSearchResultsEx(sys.argv[1])
     songid = 0
     
-    if !os.path.exists('cache/%s - %s.mp3' % (s[songid]["ArtistName"], s[songid]["SongName"])):
+    if not os.path.exists('cache/%s - %s.mp3' % (s[songid]["ArtistName"], s[songid]["SongName"])):
         time.sleep( random.random() * 4 )
         stream = getStreamKeyFromSongIDEx(s[songid]["SongID"])
         
